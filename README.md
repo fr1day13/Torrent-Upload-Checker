@@ -1,3 +1,14 @@
+This is made as a redesign of the UNIT3D Upload Checker to include different trackers and make the check process better.
+For now its a working alpha version.
+
+# Changes
+- Added Gazelle API as usable tracker
+- Added BeyondHD
+- Added hardlinking functionality
+- Search counter
+
+... more to follow 
+
 # Features
 
 - Scan directories for movies (.mkv only)
@@ -24,7 +35,7 @@ Any UNIT3D trackers can be supported by adding the necessary info.
 ## Quick Start
 
 ```sh
-git clone https://github.com/frenchcutgreenbean/UNIT3D-Upload-Checker.git
+git clone https://github.com/fr1day13/Torrent-Upload-Checker.git
 ```
 
 ```sh

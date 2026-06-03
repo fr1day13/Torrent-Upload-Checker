@@ -4,9 +4,11 @@ For now its a working alpha version.
 # Changes
 - Added Gazelle API as usable tracker
 - Added BeyondHD
+- Added Morethantv as Luminance tracker
 - Added hardlinking functionality
 - Search counter
 
+With the included gazelle and luminance tracker search, other trackers like that can be added by addint those into the tracker_info.json and adding the tags to settings.py as well as check.py for UA and GG.
 ... more to follow 
 
 # Features

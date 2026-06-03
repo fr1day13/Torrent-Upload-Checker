@@ -4,6 +4,9 @@ import traceback
 
 import requests
 
+import xml.etree.ElementTree as ET
+from urllib.parse import urljoin
+
 
 class Settings:
     def __init__(self):
@@ -15,20 +18,27 @@ class Settings:
             "keys": {
                 "aither": "",
                 "blutopia": "",
-                "fearnopeer": "",
                 "reelflix": "",
                 "lst": "",
                 "ulcx": "",
                 "onlyencodes": "",
                 "rastastugan": "",
                 "homiehelpdesk": "",
+                "yuscene": "",
+                "beyondhd": "",
+                "morethantv": "",
+                "zenith": "",
+                "midnightscene": "",
+                "greatposterwall": "",
             },
             "gg_path": "",  # Path to GG-Bot e.g. /home/user/gg-bot-upload-assistant/ --- Not required only for export_gg_bot()
             "ua_path": "",  # Path to upload-assistant, e.g. /home/user/uplaad-assistant/ --- Optional
+            "hardlink_output_folder": "",
             "search_cooldown": 5,  # In seconds. Anything less than 3 isn't recommended. 30 requests per minute is max before hit rate limits. - HDVinnie
             "min_file_size": 800,  # In MB
             "allow_dupes": True,  # If false only check for completely unique movies
             "banned_groups": [],
+            "gazelle_auth": {},
             "ignored_qualities": [
                 "dvdrip",
                 "webrip",
@@ -45,8 +55,6 @@ class Settings:
             ],  # This could be anything that would end up in the excess of parsed filename.
         }
         self.tracker_nicknames = {
-            "fnp": "fearnopeer",
-            "fearnopeer": "fearnopeer",
             "reelflix": "reelflix",
             "rfx": "reelflix",
             "aither": "aither",
@@ -61,6 +69,19 @@ class Settings:
             "oe": "onlyencodes",
             "ras": "rastastugan",
             "hhd": "homiehelpdesk",
+            "yus": "yuscene",
+            "yuscene": "yuscene",
+            "beyondhd": "beyondhd",
+            "bhd": "beyondhd",
+            "morethantv": "morethantv",
+            "mtv": "morethantv",
+            "znth": "zenith",
+            "zenith": "zenith",
+            "midnightscene": "midnightscene",
+            "mns": "midnightscene",
+            "greatposterwall": "greatposterwall",
+            "gpw": "greatposterwall",
+
         }
 
         # Basic hierarchy for qualities used to see if a file is an upgrade
@@ -182,6 +203,21 @@ class Settings:
             directories.append(path)
             self.validate_directories()
 
+    def update_gazelle_auth(self, tracker, field, value):
+        if "gazelle_auth" not in self.current_settings:
+            self.current_settings["gazelle_auth"] = {}
+
+        if tracker not in self.current_settings["gazelle_auth"]:
+            self.current_settings["gazelle_auth"][tracker] = {
+                "username": "",
+                "password": "",
+            }
+
+        self.current_settings["gazelle_auth"][tracker][field] = value
+        self.write_settings()
+
+        print(f"Updated gazelle_auth for {tracker}: {field}")
+
     def validate_tmdb(self, key):
         try:
             url = f"https://api.themoviedb.org/3/configuration?api_key={key}"
@@ -197,35 +233,65 @@ class Settings:
             return
 
     def validate_key(self, key, target):
-        api_key = None
-        tracker = None
+        if target not in self.tracker_nicknames:
+            print("Invalid tracker")
+            return
+
+        tracker = self.tracker_nicknames[target]
+
+        url = self.tracker_info[tracker]["url"]
+        api_type = self.tracker_info[tracker].get("api_type", "unit3d")
+
         try:
-            for nn in self.tracker_nicknames:
-                if target == nn:
-                    tracker = self.tracker_nicknames[nn]
-                    break
-            if not tracker:
-                print(target, " is not a supported site")
-                return
-            try:
-                url = self.tracker_info[tracker]["url"]
+            if api_type == "bhd":
+                url = f"{url.rstrip('/')}/api/torrents/{key}"
+                response = requests.post(url, data={"action": "search", "page": 1})
+
+                if response.status_code != 200:
+                    print("Invalid API Key")
+                    return
+
+                data = response.json()
+                if not data.get("success"):
+                    print("Invalid API Key")
+                    return
+
+            elif api_type == "torznab":
+                torznab_path = self.tracker_info[tracker].get("torznab_path", "api/torznab")
+                url = urljoin(url.rstrip("/") + "/", torznab_path)
+
+                response = requests.get(url, params={
+                    "apikey": key,
+                    "t": "caps",
+                })
+
+                if response.status_code != 200:
+                    print("Invalid API Key")
+                    return
+
+                root = ET.fromstring(response.content)
+                error = root.find("error")
+
+                if error is not None:
+                    print("Invalid API Key")
+                    return
+
+            else:
                 url = f"{url}api/torrents?perPage=10&api_token={key}"
                 response = requests.get(url)
+
                 # UNIT3D pushes you to the homepage if the api key is invalid
                 if response.history:
                     print("Invalid API Key")
                     return
-                else:
-                    api_key = key
-                self.current_settings["keys"][tracker] = api_key
-                self.write_settings()
-                print("Key is valid and was added to", tracker)
-            except Exception as e:
-                print("Error searching api:", e)
-                return
 
         except Exception as e:
-            print("Error Validating Key:", e)
+            print(f"Could not validate API key: {e}")
+            return
+
+        self.current_settings["keys"][tracker] = key
+        self.write_settings()
+        print("Key is valid and was added to", tracker)
 
     def setting_helper(self, target):
         settings = self.current_settings
@@ -263,10 +329,33 @@ class Settings:
 
     # Update a specific setting
     def update_setting(self, target, value):
+        if target.startswith("gazelle_user:"):
+            tracker_input = target.split(":", 1)[1]
+
+            if tracker_input not in self.tracker_nicknames:
+                print(tracker_input, "is not a supported tracker")
+                return
+
+            tracker = self.tracker_nicknames[tracker_input]
+            self.update_gazelle_auth(tracker, "username", value)
+            return
+
+        if target.startswith("gazelle_pass:"):
+            tracker_input = target.split(":", 1)[1]
+
+            if tracker_input not in self.tracker_nicknames:
+                print(tracker_input, "is not a supported tracker")
+                return
+
+            tracker = self.tracker_nicknames[tracker_input]
+            self.update_gazelle_auth(tracker, "password", value)
+            return
+
         try:
             settings = self.current_settings
             nicknames = self.tracker_nicknames
             matching_key = self.setting_helper(target)
+
             if matching_key:
                 target = matching_key  # Update target to the full key
                 if target == "tmdb_key":

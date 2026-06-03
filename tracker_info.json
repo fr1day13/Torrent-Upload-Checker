@@ -1,29 +1,32 @@
 {
-    "aither": {
-        "url": "https://aither.cc/"
-    },
-    "fearnopeer": {
-        "url": "https://fearnopeer.com/"
-    },
-    "reelflix": {
-        "url": "https://reelflix.xyz/"
-    },
-    "blutopia": {
-        "url": "https://blutopia.cc/"
-    },
-    "lst": {
-        "url": "https://lst.gg/"
-    },
-    "ulcx": {
-        "url": "https://upload.cx/"
-    },
-    "onlyencodes": {
-        "url": "https://onlyencodes.cc/"
-    },
-    "rastastugan": {
-        "url": "https://rastastugan.org/"
-    },
-    "homiehelpdesk": {
-        "url": "https://homiehelpdesk.net/"
-    }
+  "aither": { "url": "https://aither.cc/", "api_type": "unit3d" },
+  "reelflix": { "url": "https://reelflix.xyz/", "api_type": "unit3d" },
+  "blutopia": { "url": "https://blutopia.cc/", "api_type": "unit3d" },
+  "lst": { "url": "https://lst.gg/", "api_type": "unit3d" },
+  "ulcx": { "url": "https://upload.cx/", "api_type": "unit3d" },
+  "onlyencodes": { "url": "https://onlyencodes.cc/", "api_type": "unit3d" },
+  "rastastugan": { "url": "https://rastastugan.org/", "api_type": "unit3d" },
+  "homiehelpdesk": { "url": "https://homiehelpdesk.net/", "api_type": "unit3d" },
+  "yuscene": { "url": "https://yu-scene.net/", "api_type": "unit3d" },
+  "zenith": { "url": "https://znth.cx/", "api_type": "unit3d" },
+  "midnightscene": { "url": "https://midnightscene.cc/", "api_type": "unit3d" },
+
+  "beyondhd": {
+    "url": "https://beyond-hd.me/",
+    "api_type": "bhd"
+  },
+
+  "morethantv": {
+      "url": "https://www.morethantv.me/",
+      "api_type": "torznab",
+      "torznab_path": "api/torznab",
+      "torznab_movie_categories": "2000,2030,2040,2045,2050",
+      "torznab_tv_categories": "5000,5030,5040,5045,5050,5060,5070,5080"
+  },
+
+  "greatposterwall": {
+    "url": "https://greatposterwall.com/",
+    "api_type": "gazelle",
+    "gazelle_path": "ajax.php"
+}
 }

@@ -82,6 +82,16 @@ Or use Prowlarr as the tracker search backend:
 
 The Prowlarr indexer ID is the numeric ID from the indexer's Torznab URL, for example `http://localhost:9696/1/api`.
 
+Prowlarr searches run in this order:
+
+```text
+TMDB ID
+title + year + release group
+title + year
+```
+
+Both the parsed file year and the TMDB release year are used when they differ, because trackers can index either year.
+
 Set the hardlink output folder:
 
 ```sh

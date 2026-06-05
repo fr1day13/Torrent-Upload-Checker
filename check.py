@@ -538,7 +538,16 @@ class UploadChecker:
             and prowlarr.get("indexers", {}).get(tracker)
         )
 
-    def search_prowlarr_tracker(self, tracker, tmdb):
+    def search_prowlarr_tracker(
+        self,
+        tracker,
+        tmdb,
+        title=None,
+        year=None,
+        file_year=None,
+        group=None,
+        quality=None,
+    ):
         prowlarr = self.current_settings.get("prowlarr", {})
         indexer_id = prowlarr.get("indexers", {}).get(tracker)
 
@@ -547,19 +556,160 @@ class UploadChecker:
 
         base_url = prowlarr["url"].rstrip("/") + "/"
         url = urljoin(base_url, f"{indexer_id}/api")
+        searches = self.build_prowlarr_searches(tracker, tmdb, title, year, file_year, group)
+        all_results = []
+        seen = set()
+
+        for search in searches:
+            params = search["params"]
+            params["apikey"] = prowlarr["api_key"]
+
+            response = requests.get(url, params=params, timeout=self.request_timeout)
+            response.raise_for_status()
+
+            for result in self.parse_torznab_response(response.content):
+                result["search_mode"] = search["mode"]
+                result["search_query"] = search.get("query")
+
+                if not self.prowlarr_result_matches(
+                    result,
+                    title=title,
+                    years=search["years"],
+                    group=group,
+                    strict_group=search["mode"] == "title_year_group",
+                ):
+                    continue
+
+                dedupe_key = self.result_dedupe_key(result)
+                if dedupe_key in seen:
+                    continue
+
+                seen.add(dedupe_key)
+                all_results.append(result)
+
+        return all_results
+
+    def build_prowlarr_searches(
+        self,
+        tracker,
+        tmdb,
+        title=None,
+        year=None,
+        file_year=None,
+        group=None,
+    ):
         info = self.tracker_info.get(tracker, {})
+        categories = info.get("torznab_movie_categories", "2000,2030,2040,2045,2050")
+        years = self.release_year_candidates(year, file_year)
+        searches = []
 
-        params = {
-            "apikey": prowlarr["api_key"],
-            "t": "movie",
-            "tmdbid": tmdb,
-            "cat": info.get("torznab_movie_categories", "2000,2030,2040,2045,2050"),
-        }
+        searches.append({
+            "mode": "tmdb",
+            "years": years,
+            "params": {
+                "t": "movie",
+                "tmdbid": tmdb,
+                "cat": categories,
+            },
+        })
 
-        response = requests.get(url, params=params, timeout=self.request_timeout)
-        response.raise_for_status()
+        if not title:
+            return searches
 
-        return self.parse_torznab_response(response.content)
+        for release_year in years:
+            if group:
+                query = f"{title} {release_year} {group}"
+                searches.append({
+                    "mode": "title_year_group",
+                    "query": query,
+                    "years": years,
+                    "params": {
+                        "t": "search",
+                        "q": query,
+                        "cat": categories,
+                    },
+                })
+
+            query = f"{title} {release_year}"
+            searches.append({
+                "mode": "title_year",
+                "query": query,
+                "years": years,
+                "params": {
+                    "t": "search",
+                    "q": query,
+                    "cat": categories,
+                },
+            })
+
+        return searches
+
+    def release_year_candidates(self, *years):
+        candidates = []
+
+        for year in years:
+            if not year:
+                continue
+
+            match = re.search(r"\d{4}", str(year))
+            if match and match.group(0) not in candidates:
+                candidates.append(match.group(0))
+
+        return candidates
+
+    def extract_years_from_name(self, name):
+        if not name:
+            return []
+
+        return re.findall(r"\b(19\d{2}|20\d{2})\b", str(name))
+
+    def normalize_title_for_match(self, title):
+        if not title:
+            return ""
+
+        title = re.sub(r"-[A-Za-z0-9][A-Za-z0-9._-]*$", " ", str(title))
+        title = re.sub(r"\b(19\d{2}|20\d{2})\b", " ", title)
+        title = re.sub(
+            r"\b(2160p|1080p|720p|576p|480p|remux|blu[ ._-]?ray|web[ ._-]?dl|webdl|web[ ._-]?rip|webrip|hdtv|dvd|x264|x265|h264|h265|hevc)\b",
+            " ",
+            title,
+            flags=re.IGNORECASE,
+        )
+        title = re.sub(r"[^0-9a-zA-Z]+", " ", title).strip().lower()
+
+        return re.sub(r"\s+", " ", title)
+
+    def result_dedupe_key(self, result):
+        return (
+            result.get("info_hash")
+            or result.get("url")
+            or self.normalize_title_for_match(result.get("name"))
+        )
+
+    def prowlarr_result_matches(self, result, title=None, years=None, group=None, strict_group=False):
+        name = result.get("name") or ""
+
+        if title:
+            expected_title = self.normalize_title_for_match(title)
+            result_title = self.normalize_title_for_match(name)
+
+            if expected_title and result_title:
+                title_match = max(
+                    fuzz.partial_ratio(expected_title, result_title),
+                    fuzz.token_set_ratio(expected_title, result_title),
+                )
+                if title_match < 85:
+                    return False
+
+        years = years or []
+        result_years = self.extract_years_from_name(name)
+        if years and result_years and not any(result_year in years for result_year in result_years):
+            return False
+
+        if strict_group and group:
+            return self.release_groups_match(group, result.get("group"), name)
+
+        return True
 
     def parse_torznab_response(self, content):
         root = ET.fromstring(content)
@@ -700,9 +850,17 @@ class UploadChecker:
 
         return results
 
-    def search_tracker_api(self, tracker, key, tmdb, title=None, year=None):
+    def search_tracker_api(self, tracker, key, tmdb, title=None, year=None, file_year=None, group=None, quality=None):
         if self.has_prowlarr_indexer(tracker):
-            return self.search_prowlarr_tracker(tracker, tmdb)
+            return self.search_prowlarr_tracker(
+                tracker,
+                tmdb,
+                title=title,
+                year=year,
+                file_year=file_year,
+                group=group,
+                quality=quality,
+            )
 
         api_type = self.tracker_info[tracker].get("api_type", "unit3d")
 
@@ -806,6 +964,9 @@ class UploadChecker:
                                     tmdb,
                                     title=value.get("tmdb_title") or value.get("title"),
                                     year=value.get("tmdb_year") or value.get("year"),
+                                    file_year=value.get("year"),
+                                    group=file_group,
+                                    quality=quality,
                                 )
 
                                 tracker_message = None

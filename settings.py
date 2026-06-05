@@ -430,6 +430,31 @@ class Settings:
     def setting_helper(self, target):
         settings = self.current_settings
         nicknames = self.tracker_nicknames
+        aliases = {
+            "dir": "directories",
+            "dirs": "directories",
+            "directory": "directories",
+            "directories": "directories",
+            "tmdb": "tmdb_key",
+            "tmdb_key": "tmdb_key",
+            "sites": "enabled_sites",
+            "site": "enabled_sites",
+            "enabled_sites": "enabled_sites",
+            "gg": "gg_path",
+            "ua": "ua_path",
+            "hardlink": "hardlink_output_folder",
+            "hardlink_output_folder": "hardlink_output_folder",
+            "search": "search_cooldown",
+            "size": "min_file_size",
+            "dupes": "allow_dupes",
+            "banned": "banned_groups",
+            "qual": "ignored_qualities",
+            "keywords": "ignored_keywords",
+        }
+
+        if target in aliases:
+            return aliases[target]
+
         matching_keys = [key for key in settings.keys() if target in key]
         matching_nicks = [nick for nick in nicknames.keys() if target in nick]
         if len(matching_nicks) >= 1:
@@ -442,7 +467,7 @@ class Settings:
             )
             print(settings.keys())
             print(
-                "Unique substrings accepted: dir, tmdb, sites, gg, search, size, dupes, banned, qual, keywords, prowlarr_url, prowlarr_api_key"
+                "Unique substrings accepted: dir, tmdb, sites, gg, search, size, dupes, banned, qual, keywords, tracker_directories:<site>, prowlarr_url, prowlarr_api_key"
             )
             print(
                 "If you're trying to add a tracker key, you can use setting-add -t <site> -s <api_key>"
@@ -456,7 +481,7 @@ class Settings:
             print(target, " is not a supported setting")
             print("Accepted targets: ", settings.keys())
             print(
-                "Unique substrings accepted: dir, tmdb, sites, gg, search, size, dupes, banned, qual, keywords, prowlarr_url, prowlarr_api_key"
+                "Unique substrings accepted: dir, tmdb, sites, gg, search, size, dupes, banned, qual, keywords, tracker_directories:<site>, prowlarr_url, prowlarr_api_key"
             )
             print(
                 "If you're trying to add a tracker key, you can use setting-add -t <site> -s <api_key>"

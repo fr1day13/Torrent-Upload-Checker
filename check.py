@@ -239,6 +239,39 @@ class UploadChecker:
             print("Error scanning directories: ", e)
             print(traceback.format_exc())
 
+    def validate_tmdb_movie(self, value, verbose=False):
+        tmdb = value.get("tmdb")
+
+        if not tmdb:
+            return False
+
+        if value.get("tmdb_type") == "movie":
+            return True
+
+        url = f"https://api.themoviedb.org/3/movie/{tmdb}?api_key={self.tmdb_key}&language=en-US"
+        response = requests.get(url, timeout=self.request_timeout)
+
+        if response.status_code != 200:
+            if verbose:
+                print(f"Stored TMDB id {tmdb} is not a movie. Searching again.")
+            value.pop("tmdb", None)
+            value.pop("tmdb_title", None)
+            value.pop("tmdb_year", None)
+            value.pop("tmdb_type", None)
+            return False
+
+        data = response.json()
+        value["tmdb"] = data["id"]
+        value["tmdb_type"] = "movie"
+        value["tmdb_title"] = data.get("title") or value.get("tmdb_title")
+        value["tmdb_year"] = (
+            re.search(r"\d{4}", data["release_date"]).group().strip()
+            if data.get("release_date")
+            else value.get("tmdb_year")
+        )
+
+        return True
+
     def get_tmdb(self, verbose=False):
         try:
             if not self.scan_data:
@@ -260,7 +293,7 @@ class UploadChecker:
                     if value.get("banned"):
                         continue
 
-                    if value.get("tmdb"):
+                    if value.get("tmdb") and self.validate_tmdb_movie(value, verbose):
                         if verbose:
                             print(value["title"], " Already searched on TMDB.")
                         continue
@@ -294,6 +327,9 @@ class UploadChecker:
                             continue
 
                         for r in results:
+                            if not r.get("id") or not r.get("title"):
+                                continue
+
                             if "vote_count" in r and (r["vote_count"] == 0 or r["vote_count"] <= 5):
                                 value["banned"] = True
                                 self.save_database()
@@ -312,6 +348,7 @@ class UploadChecker:
 
                             if match >= 85:
                                 value["tmdb"] = r["id"]
+                                value["tmdb_type"] = "movie"
                                 value["tmdb_title"] = tmdb_title
                                 value["tmdb_year"] = tmdb_year
                                 if verbose:

@@ -39,6 +39,10 @@ With the included gazelle and luminance tracker search, other trackers like that
 Any UNIT3D trackers can be supported by adding the necessary info.
 
 ## Quick Start
+1. install
+2. set trackers to use (prowlarr search is recommended)
+3. set hardlink folder (highly recommended if the files are not already seperated)
+4. run the search
 
 ```sh
 git clone https://github.com/fr1day13/Torrent-Upload-Checker.git
@@ -58,13 +62,13 @@ chmod +x check.py
 
 ### Add Required Settings
 
-directories
+directories with files to search
 
 ```sh
 ./check.py setting-add --target dir --set /home/movies/
 ```
 
--t and -s accepted
+-t and -s accepted (instead of --target and --set)
 
 Add tracker key or keys: (aith, blu, fnp, rfx)
 

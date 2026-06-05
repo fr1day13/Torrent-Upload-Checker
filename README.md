@@ -124,6 +124,30 @@ Use `all` to reset a tracker to all directories:
 ./check.py setting-add -t tracker_directories:blu -s all
 ```
 
+Duplicate handling:
+
+```sh
+./check.py setting-add -t dupes -s true
+```
+
+`allow_dupes` defaults to `true`. If it is `true`, found tracker results are compared by resolution, quality, and release group. If it is `false`, any result on a tracker is treated as a duplicate.
+
+Minimum file size:
+
+```sh
+./check.py setting-add -t size -s 50
+```
+
+`min_file_size` defaults to `50` MB. Files smaller than this are skipped during scanning.
+
+Ignored release types:
+
+```sh
+./check.py setting-add -t qual -s hdtv
+```
+
+`ignored_qualities` defaults to `cam`, `ts`, and `telesync`. Other release types are allowed by default. Add more qualities with `qual` if you want to skip them during scanning.
+
 Your TMDB api key.
 
 ```sh

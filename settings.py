@@ -270,6 +270,20 @@ class Settings:
 
         print(f"Updated Prowlarr {field}")
 
+    def has_prowlarr_indexer(self, tracker):
+        prowlarr = self.current_settings.get("prowlarr", {})
+        return bool(
+            prowlarr.get("url")
+            and prowlarr.get("api_key")
+            and prowlarr.get("indexers", {}).get(tracker)
+        )
+
+    def has_tracker_search_config(self, tracker):
+        return bool(
+            self.current_settings.get("keys", {}).get(tracker)
+            or self.has_prowlarr_indexer(tracker)
+        )
+
     def validate_tmdb(self, key):
         try:
             url = f"https://api.themoviedb.org/3/configuration?api_key={key}"
@@ -443,11 +457,12 @@ class Settings:
                     elif target == "enabled_sites":
                         if value in nicknames:
                             tracker = nicknames[value]
-                            if not self.current_settings["keys"].get(tracker):
+                            if not self.has_tracker_search_config(tracker):
                                 print(
-                                    "There is currently no api key for",
+                                    "There is currently no direct API key or complete Prowlarr config for",
                                     value,
                                     f"\nAdd one using setting-add -t {value} -s <api_key>",
+                                    f"\nor set Prowlarr with setting-add -t prowlarr_indexer:{value} -s <indexer_id>",
                                 )
                         else:
                             print(value, " is not a supported site")

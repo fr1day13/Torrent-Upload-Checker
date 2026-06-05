@@ -110,6 +110,8 @@ Enable sites:
 ./check.py setting-add -t sites -s blu
 ```
 
+Trackers still need to be enabled with `sites` after adding either a direct tracker API key or a Prowlarr indexer ID. This list controls which trackers are searched.
+
 Your TMDB api key.
 
 ```sh

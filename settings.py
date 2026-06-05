@@ -116,6 +116,7 @@ class Settings:
             if not self.current_settings:
                 self.current_settings = self.default_settings
             self.migrate_settings()
+            self.write_settings()
             # Load tracker_info.json used for resolution mapping
             if not self.tracker_info:
                 with open("tracker_info.json", "r") as file:

@@ -112,6 +112,18 @@ Enable sites:
 
 Trackers still need to be enabled with `sites` after adding either a direct tracker API key or a Prowlarr indexer ID. This list controls which trackers are searched.
 
+By default, every enabled tracker searches all configured directories. Limit a tracker to one directory like this:
+
+```sh
+./check.py setting-add -t tracker_directories:blu -s /home/movies-2/
+```
+
+Use `all` to reset a tracker to all directories:
+
+```sh
+./check.py setting-add -t tracker_directories:blu -s all
+```
+
 Your TMDB api key.
 
 ```sh

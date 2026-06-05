@@ -912,6 +912,21 @@ class UploadChecker:
 
         return self.search_unit3d_tracker(tracker, key, tmdb)
 
+    def tracker_uses_directory(self, tracker, directory):
+        tracker_directories = self.current_settings.get("tracker_directories", {})
+        allowed_directories = tracker_directories.get(tracker, "all")
+
+        if allowed_directories == "all":
+            return True
+
+        directory = str(Path(directory).resolve()) + os.path.sep
+        normalized_allowed = [
+            str(Path(allowed).resolve()) + os.path.sep
+            for allowed in allowed_directories
+        ]
+
+        return directory in normalized_allowed
+
     def search_trackers(self, verbose=False):
         try:
             print("Searching trackers")
@@ -941,6 +956,7 @@ class UploadChecker:
                     remaining_trackers = [
                         t for t in self.enabled_sites
                         if t not in existing_trackers
+                        and self.tracker_uses_directory(t, directory)
                     ]
 
                     if not remaining_trackers:
@@ -1662,6 +1678,7 @@ class UploadChecker:
         self.directories = self.current_settings["directories"]
         self.tmdb_key = self.current_settings["tmdb_key"]
         self.enabled_sites = self.current_settings["enabled_sites"]
+        self.tracker_directories = self.current_settings.get("tracker_directories", {})
         self.cooldown = self.current_settings["search_cooldown"]
         self.minimum_size = self.current_settings["min_file_size"]
         self.allow_dupes = self.current_settings["allow_dupes"]
@@ -1745,7 +1762,7 @@ parser.add_argument(
         "Specify the target setting to update."
         "\nValid targets: directories, tmdb_key, enabled_sites, gg_path, ua_path, "
         "hardlink_output_folder, search_cooldown, min_file_size, allow_dupes, "
-        "banned_groups, ignored_qualities, ignored_keywords, prowlarr_url, "
+        "banned_groups, ignored_qualities, ignored_keywords, tracker_directories:<site>, prowlarr_url, "
         "prowlarr_api_key"
         "\nYou can also use setting-add to add api keys by tracker nickname."
         "\nProwlarr indexers use prowlarr_indexer:<site> as target."

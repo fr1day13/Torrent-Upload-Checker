@@ -15,6 +15,7 @@ class Settings:
             "directories": [],
             "tmdb_key": "",  # https://www.themoviedb.org/settings/api
             "enabled_sites": [],
+            "tracker_directories": {},
             "keys": {
                 "aither": "",
                 "blutopia": "",
@@ -141,6 +142,10 @@ class Settings:
                 prowlarr[key] = value
                 changed = True
 
+        if "tracker_directories" not in self.current_settings:
+            self.current_settings["tracker_directories"] = {}
+            changed = True
+
         if changed:
             self.write_settings()
 
@@ -229,6 +234,69 @@ class Settings:
             # Add the new path to the list
             directories.append(path)
             self.validate_directories()
+
+    def normalize_directory_setting(self, path):
+        if path.lower() == "all":
+            return "all"
+
+        normalized = os.path.abspath(os.path.expanduser(path))
+        if not os.path.exists(normalized):
+            raise ValueError("Path doesn't exist")
+
+        if not normalized.endswith(os.path.sep):
+            normalized += os.path.sep
+
+        return normalized
+
+    def normalize_directory_for_compare(self, path):
+        normalized = os.path.abspath(os.path.expanduser(path))
+        if not normalized.endswith(os.path.sep):
+            normalized += os.path.sep
+
+        return normalized
+
+    def update_tracker_directories(self, tracker_input, value):
+        if tracker_input not in self.tracker_nicknames:
+            print(tracker_input, "is not a supported tracker")
+            return
+
+        tracker = self.tracker_nicknames[tracker_input]
+        if "tracker_directories" not in self.current_settings:
+            self.current_settings["tracker_directories"] = {}
+
+        if value.lower() == "all":
+            self.current_settings["tracker_directories"][tracker] = "all"
+            self.write_settings()
+            print(f"{tracker} will search all directories")
+            return
+
+        directory = self.normalize_directory_setting(value)
+
+        configured_directories = [
+            self.normalize_directory_for_compare(path)
+            for path in self.current_settings["directories"]
+        ]
+
+        if directory not in configured_directories:
+            print(
+                directory,
+                "is not in directories. Add it first with setting-add -t dir -s <path>",
+            )
+            return
+
+        current = self.current_settings["tracker_directories"].get(tracker, "all")
+        if current == "all":
+            current = []
+
+        if directory in current:
+            print(directory, "Already enabled for", tracker)
+            return
+
+        current.append(directory)
+        self.current_settings["tracker_directories"][tracker] = current
+        self.write_settings()
+
+        print(directory, "Successfully added to tracker_directories for", tracker)
 
     def update_gazelle_auth(self, tracker, field, value):
         if "gazelle_auth" not in self.current_settings:
@@ -401,6 +469,11 @@ class Settings:
 
     # Update a specific setting
     def update_setting(self, target, value):
+        if target.startswith("tracker_directories:"):
+            tracker_input = target.split(":", 1)[1]
+            self.update_tracker_directories(tracker_input, value)
+            return
+
         if target == "prowlarr_url":
             self.update_prowlarr_setting("url", value)
             return

@@ -1,7 +1,11 @@
 This is made as a redesign of the UNIT3D Upload Checker to include different trackers and make the check process better.
 For now its a working alpha version.
 
+Main change of this branche is now, that i integrated the prowlarr api as a way to search trackers.
+
+
 # Changes
+- Added Prowlarr-backed Torznab search support
 - Added Gazelle API as usable tracker
 - Added BeyondHD
 - Added Morethantv as Luminance tracker
@@ -67,6 +71,24 @@ Add tracker key or keys: (aith, blu, fnp, rfx)
 ```sh
 ./check.py setting-add -t blu -s <api_key>
 ```
+
+Or use Prowlarr as the tracker search backend:
+
+```sh
+./check.py setting-add -t prowlarr_url -s http://localhost:9696
+./check.py setting-add -t prowlarr_api_key -s <prowlarr_api_key>
+./check.py setting-add -t prowlarr_indexer:blu -s <prowlarr_indexer_id>
+```
+
+The Prowlarr indexer ID is the numeric ID from the indexer's Torznab URL, for example `http://localhost:9696/1/api`.
+
+Set the hardlink output folder:
+
+```sh
+./check.py setting-add -t hardlink_output_folder -s /home/uploads/
+```
+
+The folder is created when the setting is added. Hardlinks are written below it by tracker and section, for example `blu/safe`.
 
 Enable sites:
 
@@ -175,3 +197,8 @@ Q: Why is tracker x not supported?
 Q: How can I add support for different UNIT3D trackers?
 
 - A: First you need to edit tracker_info.json. Then, append the relevant details in settings.py. self.tracker_nicknames & self.default_settings["keys"]
+
+## Reference Repositories
+
+- Prowlarr: <https://github.com/Prowlarr/Prowlarr>
+- cross-seed: <https://github.com/cross-seed/cross-seed>

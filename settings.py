@@ -31,6 +31,11 @@ class Settings:
                 "midnightscene": "",
                 "greatposterwall": "",
             },
+            "prowlarr": {
+                "url": "",
+                "api_key": "",
+                "indexers": {},
+            },
             "gg_path": "",  # Path to GG-Bot e.g. /home/user/gg-bot-upload-assistant/ --- Not required only for export_gg_bot()
             "ua_path": "",  # Path to upload-assistant, e.g. /home/user/uplaad-assistant/ --- Optional
             "hardlink_output_folder": "",
@@ -110,12 +115,34 @@ class Settings:
             # Set the settings to our class
             if not self.current_settings:
                 self.current_settings = self.default_settings
+            self.migrate_settings()
             # Load tracker_info.json used for resolution mapping
             if not self.tracker_info:
                 with open("tracker_info.json", "r") as file:
                     self.tracker_info = json.load(file)
         except Exception as e:
             print("Error initializing settings: ", e)
+
+    def migrate_settings(self):
+        changed = False
+
+        for key, value in self.default_settings.items():
+            if key not in self.current_settings:
+                self.current_settings[key] = value
+                changed = True
+
+        if "prowlarr" not in self.current_settings:
+            self.current_settings["prowlarr"] = self.default_settings["prowlarr"]
+            changed = True
+
+        prowlarr = self.current_settings["prowlarr"]
+        for key, value in self.default_settings["prowlarr"].items():
+            if key not in prowlarr:
+                prowlarr[key] = value
+                changed = True
+
+        if changed:
+            self.write_settings()
 
     # Clean directories from loaded settings
     def validate_directories(self):
@@ -218,6 +245,31 @@ class Settings:
 
         print(f"Updated gazelle_auth for {tracker}: {field}")
 
+    def update_prowlarr_indexer(self, tracker_input, value):
+        if tracker_input not in self.tracker_nicknames:
+            print(tracker_input, "is not a supported tracker")
+            return
+
+        tracker = self.tracker_nicknames[tracker_input]
+        if "prowlarr" not in self.current_settings:
+            self.current_settings["prowlarr"] = self.default_settings["prowlarr"]
+        if "indexers" not in self.current_settings["prowlarr"]:
+            self.current_settings["prowlarr"]["indexers"] = {}
+
+        self.current_settings["prowlarr"]["indexers"][tracker] = str(value)
+        self.write_settings()
+
+        print(f"Updated Prowlarr indexer for {tracker}: {value}")
+
+    def update_prowlarr_setting(self, field, value):
+        if "prowlarr" not in self.current_settings:
+            self.current_settings["prowlarr"] = self.default_settings["prowlarr"]
+
+        self.current_settings["prowlarr"][field] = value.rstrip("/") if field == "url" else value
+        self.write_settings()
+
+        print(f"Updated Prowlarr {field}")
+
     def validate_tmdb(self, key):
         try:
             url = f"https://api.themoviedb.org/3/configuration?api_key={key}"
@@ -308,10 +360,13 @@ class Settings:
             )
             print(settings.keys())
             print(
-                "Unique substrings accepted: dir, tmdb, sites, gg, search, size, dupes, banned, qual, keywords"
+                "Unique substrings accepted: dir, tmdb, sites, gg, search, size, dupes, banned, qual, keywords, prowlarr_url, prowlarr_api_key"
             )
             print(
                 "If you're trying to add a tracker key, you can use setting-add -t <site> -s <api_key>"
+            )
+            print(
+                "If you're trying to add a Prowlarr indexer ID, use setting-add -t prowlarr_indexer:<site> -s <indexer_id>"
             )
             print("Accepted sites: ", nicknames.keys())
             return
@@ -319,16 +374,32 @@ class Settings:
             print(target, " is not a supported setting")
             print("Accepted targets: ", settings.keys())
             print(
-                "Unique substrings accepted: dir, tmdb, sites, gg, search, size, dupes, banned, qual, keywords"
+                "Unique substrings accepted: dir, tmdb, sites, gg, search, size, dupes, banned, qual, keywords, prowlarr_url, prowlarr_api_key"
             )
             print(
                 "If you're trying to add a tracker key, you can use setting-add -t <site> -s <api_key>"
+            )
+            print(
+                "If you're trying to add a Prowlarr indexer ID, use setting-add -t prowlarr_indexer:<site> -s <indexer_id>"
             )
             print("Accepted sites: ", nicknames.keys())
             return
 
     # Update a specific setting
     def update_setting(self, target, value):
+        if target == "prowlarr_url":
+            self.update_prowlarr_setting("url", value)
+            return
+
+        if target == "prowlarr_api_key":
+            self.update_prowlarr_setting("api_key", value)
+            return
+
+        if target.startswith("prowlarr_indexer:"):
+            tracker_input = target.split(":", 1)[1]
+            self.update_prowlarr_indexer(tracker_input, value)
+            return
+
         if target.startswith("gazelle_user:"):
             tracker_input = target.split(":", 1)[1]
 
@@ -362,6 +433,8 @@ class Settings:
                     self.validate_tmdb(value)
                     settings[target] = value
                 if isinstance(settings[target], str):
+                    if target == "hardlink_output_folder":
+                        os.makedirs(value, exist_ok=True)
                     settings[target] = value
                     print(value, " Successfully added to ", target)
                 elif isinstance(settings[target], list):

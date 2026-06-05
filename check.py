@@ -528,7 +528,41 @@ class UploadChecker:
         response = requests.get(url, params=params, timeout=self.request_timeout)
         response.raise_for_status()
 
-        root = ET.fromstring(response.content)
+        return self.parse_torznab_response(response.content)
+
+    def has_prowlarr_indexer(self, tracker):
+        prowlarr = self.current_settings.get("prowlarr", {})
+        return bool(
+            prowlarr.get("url")
+            and prowlarr.get("api_key")
+            and prowlarr.get("indexers", {}).get(tracker)
+        )
+
+    def search_prowlarr_tracker(self, tracker, tmdb):
+        prowlarr = self.current_settings.get("prowlarr", {})
+        indexer_id = prowlarr.get("indexers", {}).get(tracker)
+
+        if not indexer_id:
+            raise RuntimeError(f"No Prowlarr indexer ID configured for {tracker}")
+
+        base_url = prowlarr["url"].rstrip("/") + "/"
+        url = urljoin(base_url, f"{indexer_id}/api")
+        info = self.tracker_info.get(tracker, {})
+
+        params = {
+            "apikey": prowlarr["api_key"],
+            "t": "movie",
+            "tmdbid": tmdb,
+            "cat": info.get("torznab_movie_categories", "2000,2030,2040,2045,2050"),
+        }
+
+        response = requests.get(url, params=params, timeout=self.request_timeout)
+        response.raise_for_status()
+
+        return self.parse_torznab_response(response.content)
+
+    def parse_torznab_response(self, content):
+        root = ET.fromstring(content)
 
         error = root.find("error")
         if error is not None:
@@ -667,6 +701,9 @@ class UploadChecker:
         return results
 
     def search_tracker_api(self, tracker, key, tmdb, title=None, year=None):
+        if self.has_prowlarr_indexer(tracker):
+            return self.search_prowlarr_tracker(tracker, tmdb)
+
         api_type = self.tracker_info[tracker].get("api_type", "unit3d")
 
         if api_type == "bhd":
@@ -685,6 +722,9 @@ class UploadChecker:
             print("Searching trackers")
 
             for tracker in self.enabled_sites:
+                if self.has_prowlarr_indexer(tracker):
+                    continue
+
                 api_key = self.current_settings["keys"].get(tracker)
                 if not api_key:
                     print(f"No API key for {tracker} found.")
@@ -756,7 +796,7 @@ class UploadChecker:
                                     continue
 
                                 tracker_key = self.current_settings["keys"].get(tracker)
-                                if not tracker_key:
+                                if not tracker_key and not self.has_prowlarr_indexer(tracker):
                                     print(f"No API key for {tracker} found. Skipping.")
                                     continue
 
@@ -1507,8 +1547,10 @@ parser.add_argument(
         "Specify the target setting to update."
         "\nValid targets: directories, tmdb_key, enabled_sites, gg_path, ua_path, "
         "hardlink_output_folder, search_cooldown, min_file_size, allow_dupes, "
-        "banned_groups, ignored_qualities, ignored_keywords"
+        "banned_groups, ignored_qualities, ignored_keywords, prowlarr_url, "
+        "prowlarr_api_key"
         "\nYou can also use setting-add to add api keys by tracker nickname."
+        "\nProwlarr indexers use prowlarr_indexer:<site> as target."
     ),
 )
 

@@ -1,5 +1,6 @@
 {
   "aither": { "url": "https://aither.cc/", "api_type": "unit3d" },
+  "fearnopeer": { "url": "https://fearnopeer.com/", "api_type": "unit3d" },
   "reelflix": { "url": "https://reelflix.xyz/", "api_type": "unit3d" },
   "blutopia": { "url": "https://blutopia.cc/", "api_type": "unit3d" },
   "lst": { "url": "https://lst.gg/", "api_type": "unit3d" },

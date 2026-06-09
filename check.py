@@ -18,6 +18,7 @@ import shutil
 from pathlib import Path
 import xml.etree.ElementTree as ET
 from urllib.parse import urljoin
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # For gg-bot -t flag and Upload Assistant --trackers flag.
 # LEFT SIDE = internal tracker name from tracker_info.json / settings.json
@@ -996,38 +997,53 @@ class UploadChecker:
                         value["trackers"] = {}
 
                     try:
-                        for tracker in remaining_trackers:
-                            try:
-                                if tracker in value["trackers"]:
-                                    if verbose:
-                                        print(
-                                            f"{self.output_folder}{tracker} already searched. "
-                                            f"For {value['title']} Skipping."
-                                        )
-                                    continue
+                        def search_one_tracker(tracker):
+                           try:
+                             if tracker in value["trackers"]:
+                                 return {
+                                     "tracker": tracker,
+                                        "cached": False,
+                                        "message": None,
+                                       "output": (
+                                         f"{self.output_folder}{tracker} already searched. "
+                                         f"For {value['title']} Skipping."
+                                        ),
+                                       "error": False,
+                                    }
 
-                                tracker_key = self.current_settings["keys"].get(tracker)
-                                if not tracker_key and not self.has_prowlarr_indexer(tracker):
-                                    print(f"No API key for {tracker} found. Skipping.")
-                                    continue
+                             tracker_key = self.current_settings["keys"].get(tracker)
 
-                                results = self.search_tracker_api(
-                                    tracker,
-                                    tracker_key,
-                                    tmdb,
-                                    title=value.get("tmdb_title") or value.get("title"),
-                                    year=value.get("tmdb_year") or value.get("year"),
-                                    file_year=value.get("year"),
-                                    group=file_group,
+                             if not tracker_key and not self.has_prowlarr_indexer(tracker):
+                                  return {
+                                      "tracker": tracker,
+                                        "cached": False,
+                                      "message": None,
+                                       "output": f"No API key for {tracker} found. Skipping.",
+                                       "error": False,
+                                   }
+
+                              results = self.search_tracker_api(
+                                  tracker,
+                                  tracker_key,
+                                  tmdb,
+                                   title=value.get("tmdb_title") or value.get("title"),
+                                   year=value.get("tmdb_year") or value.get("year"),
+                                   file_year=value.get("year"),
+                                   group=file_group,
                                     quality=quality,
-                                )
+                               )
 
-                                tracker_message = None
+                               tracker_message = None
 
                                 if results and not self.allow_dupes:
-                                    print("Duplicate results detected and allow_dupes is set to False. Banning.")
-                                    value["trackers"][tracker] = True
-                                    continue
+                                 tracker_message = True
+                                    return {
+                                      "tracker": tracker,
+                                      "cached": True,
+                                      "message": tracker_message,
+                                     "output": "Duplicate results detected and allow_dupes is set to False. Banning.",
+                                     "error": False,
+                                  }
 
                                 if results:
                                     loop_results = []
@@ -1035,7 +1051,6 @@ class UploadChecker:
                                     for i, result in enumerate(results):
                                         dupe_res = False
                                         dupe_quality = False
-                                        dupe_group = False
 
                                         tracker_resolution = result.get("resolution")
                                         tracker_quality = re.sub(
@@ -1076,7 +1091,6 @@ class UploadChecker:
                                         # Same resolution + same group = secure duplicate.
                                         if dupe_res and dupe_group:
                                             tracker_message = True
-                                            value["trackers"][tracker] = tracker_message
                                             break
 
                                         if quality and tracker_quality.lower() == quality.lower():
@@ -1084,7 +1098,6 @@ class UploadChecker:
 
                                         if dupe_res and dupe_quality:
                                             tracker_message = True
-                                            value["trackers"][tracker] = tracker_message
                                             break
 
                                         elif (dupe_res and not quality) or (
@@ -1094,7 +1107,6 @@ class UploadChecker:
                                                 f"Source was found on {tracker}, but couldn't get enough info "
                                                 "from filename. Manual search required."
                                             )
-                                            value["trackers"][tracker] = tracker_message
                                             break
 
                                         elif dupe_res and quality:
@@ -1104,6 +1116,7 @@ class UploadChecker:
                                     else:
                                         if loop_results:
                                             is_upgrade = True
+
                                             for lr in loop_results:
                                                 if not self.settings.is_upgrade(quality, lr):
                                                     is_upgrade = False
@@ -1114,25 +1127,97 @@ class UploadChecker:
                                                     f"Resolution found on {tracker}, "
                                                     f"but seems like an upgrade. {quality}"
                                                 )
-                                                value["trackers"][tracker] = tracker_message
                                             else:
                                                 tracker_message = (
                                                     f"Resolution found on {tracker}, "
                                                     "but could be a new quality. Manual search recommended."
                                                 )
-                                                value["trackers"][tracker] = tracker_message
                                         else:
                                             tracker_message = (
                                                 f"Possible new release. "
                                                 f"{quality if quality else ''} {resolution if resolution else ''}"
                                             )
-                                            value["trackers"][tracker] = tracker_message
 
                                 else:
                                     tracker_message = False
-                                    value["trackers"][tracker] = tracker_message
 
-                                # Create the hardlink immediately after this tracker has been classified.
+                                if tracker_message is True:
+                                    output = f"Already on {tracker}"
+                                elif tracker_message is False:
+                                    output = f"Not on {tracker}"
+                                else:
+                                    output = tracker_message
+
+                                return {
+                                    "tracker": tracker,
+                                    "cached": True,
+                                    "message": tracker_message,
+                                    "output": output,
+                                    "error": False,
+                                }
+
+                            except requests.exceptions.Timeout:
+                                return {
+                                    "tracker": tracker,
+                                    "cached": False,
+                                    "message": None,
+                                    "output": (
+                                        f"Timeout searching {tracker} for {value['title']}. "
+                                        "Search was not cached and will be retried next run."
+                                    ),
+                                    "error": True,
+                                }
+
+                            except requests.exceptions.RequestException as e:
+                                return {
+                                    "tracker": tracker,
+                                    "cached": False,
+                                    "message": None,
+                                    "output": (
+                                        f"Request error searching {tracker} for {value['title']}: {e}. "
+                                        "Search was not cached and will be retried next run."
+                                    ),
+                                    "error": True,
+                                }
+
+                            except Exception as e:
+                                return {
+                                    "tracker": tracker,
+                                    "cached": False,
+                                    "message": None,
+                                    "output": (
+                                        f"Something went wrong searching {tracker} for "
+                                        f"{value['title']}: {e}\n{traceback.format_exc()}"
+                                    ),
+                                    "error": True,
+                                }
+
+                        tracker_results = {}
+
+                        max_workers = len(remaining_trackers)
+
+                        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                            futures = {
+                                executor.submit(search_one_tracker, tracker): tracker
+                                for tracker in remaining_trackers
+                            }
+
+                            for future in as_completed(futures):
+                                result = future.result()
+                                tracker_results[result["tracker"]] = result
+
+                        for tracker in remaining_trackers:
+                            result = tracker_results.get(tracker)
+
+                            if not result:
+                                continue
+
+                            tracker_message = result["message"]
+
+                            if result["cached"]:
+                                value["trackers"][tracker] = tracker_message
+
+                                # Create the hardlink after this tracker has been classified.
                                 section = self.section_for_tracker_message(tracker_message)
                                 if section:
                                     self.hardlink_single_file(
@@ -1141,37 +1226,15 @@ class UploadChecker:
                                         value["file_location"],
                                     )
 
-                                if verbose:
-                                    if tracker_message is True:
-                                        print(f"Already on {tracker}")
-                                    elif tracker_message is False:
-                                        print(f"Not on {tracker}")
-                                    else:
-                                        print(tracker_message)
-
-                            except requests.exceptions.Timeout as e:
-                                print(
-                                    f"Timeout searching {tracker} for {value['title']}. "
-                                    "Search was not cached and will be retried next run."
-                                )
-                                continue
-
-                            except requests.exceptions.RequestException as e:
-                                print(
-                                    f"Request error searching {tracker} for {value['title']}: {e}. "
-                                    "Search was not cached and will be retried next run."
-                                )
-                                continue
-
-                            except Exception as e:
-                                print(
-                                    f"Something went wrong searching {tracker} for {value['title']}: {e}"
-                                )
-                                print(traceback.format_exc())
-                                continue
+                            if verbose or result["error"]:
+                                print(result["output"])
 
                         print("Waiting for cooldown...", self.cooldown, "seconds")
                         time.sleep(self.cooldown)
+
+                    except Exception as e:
+                        print(f"Something went wrong searching trackers for {value['title']} ", e)
+                        print(traceback.format_exc())
 
                     except Exception as e:
                         print(f"Something went wrong searching trackers for {value['title']} ", e)

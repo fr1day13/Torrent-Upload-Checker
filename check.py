@@ -996,257 +996,245 @@ class UploadChecker:
                     if "trackers" not in value:
                         value["trackers"] = {}
 
-                    try:
-                        def search_one_tracker(tracker):
-                           try:
-                             if tracker in value["trackers"]:
-                                 return {
-                                     "tracker": tracker,
-                                        "cached": False,
-                                        "message": None,
-                                       "output": (
-                                         f"{self.output_folder}{tracker} already searched. "
-                                         f"For {value['title']} Skipping."
-                                        ),
-                                       "error": False,
-                                    }
+                try:
+                    def search_one_tracker(tracker):
+                        try:
+                            if tracker in value["trackers"]:
+                                return {
+                                    "tracker": tracker,
+                                    "cached": False,
+                                    "message": None,
+                                    "output": (
+                                        f"{self.output_folder}{tracker} already searched. "
+                                        f"For {value['title']} Skipping."
+                                    ),
+                                    "error": False,
+                                }
 
-                             tracker_key = self.current_settings["keys"].get(tracker)
+                            tracker_key = self.current_settings["keys"].get(tracker)
 
-                             if not tracker_key and not self.has_prowlarr_indexer(tracker):
-                                  return {
-                                      "tracker": tracker,
-                                        "cached": False,
-                                      "message": None,
-                                       "output": f"No API key for {tracker} found. Skipping.",
-                                       "error": False,
-                                   }
+                            if not tracker_key and not self.has_prowlarr_indexer(tracker):
+                                return {
+                                    "tracker": tracker,
+                                    "cached": False,
+                                    "message": None,
+                                    "output": f"No API key for {tracker} found. Skipping.",
+                                    "error": False,
+                                }
 
-                              results = self.search_tracker_api(
-                                  tracker,
-                                  tracker_key,
-                                  tmdb,
-                                   title=value.get("tmdb_title") or value.get("title"),
-                                   year=value.get("tmdb_year") or value.get("year"),
-                                   file_year=value.get("year"),
-                                   group=file_group,
-                                    quality=quality,
-                               )
+                            results = self.search_tracker_api(
+                                tracker,
+                                tracker_key,
+                                tmdb,
+                                title=value.get("tmdb_title") or value.get("title"),
+                                year=value.get("tmdb_year") or value.get("year"),
+                                file_year=value.get("year"),
+                                group=file_group,
+                                quality=quality,
+                            )
 
-                               tracker_message = None
+                            tracker_message = None
 
-                                if results and not self.allow_dupes:
-                                 tracker_message = True
-                                    return {
-                                      "tracker": tracker,
-                                      "cached": True,
-                                      "message": tracker_message,
-                                     "output": "Duplicate results detected and allow_dupes is set to False. Banning.",
-                                     "error": False,
-                                  }
-
-                                if results:
-                                    loop_results = []
-
-                                    for i, result in enumerate(results):
-                                        dupe_res = False
-                                        dupe_quality = False
-
-                                        tracker_resolution = result.get("resolution")
-                                        tracker_quality = re.sub(
-                                            r"[^a-zA-Z]",
-                                            "",
-                                            result.get("quality") or "",
-                                        ).strip()
-
-                                        tracker_group = self.normalize_group(result.get("group"))
-                                        file_group_clean = self.normalize_group(file_group)
-                                        tracker_name = result.get("name")
-
-                                        dupe_group = self.release_groups_match(
-                                            file_group_clean,
-                                            tracker_group,
-                                            tracker_name,
-                                        )
-
-                                        clean_tracker_resolution = (
-                                            "".join(re.findall(r"\d+", tracker_resolution))
-                                            if tracker_resolution
-                                            else None
-                                        )
-
-                                        clean_file_resolution = (
-                                            "".join(re.findall(r"\d+", resolution))
-                                            if resolution
-                                            else None
-                                        )
-
-                                        if (
-                                            clean_file_resolution
-                                            and clean_tracker_resolution
-                                            and clean_file_resolution == clean_tracker_resolution
-                                        ):
-                                            dupe_res = True
-
-                                        # Same resolution + same group = secure duplicate.
-                                        if dupe_res and dupe_group:
-                                            tracker_message = True
-                                            break
-
-                                        if quality and tracker_quality.lower() == quality.lower():
-                                            dupe_quality = True
-
-                                        if dupe_res and dupe_quality:
-                                            tracker_message = True
-                                            break
-
-                                        elif (dupe_res and not quality) or (
-                                            quality and dupe_quality and not resolution
-                                        ):
-                                            tracker_message = (
-                                                f"Source was found on {tracker}, but couldn't get enough info "
-                                                "from filename. Manual search required."
-                                            )
-                                            break
-
-                                        elif dupe_res and quality:
-                                            loop_message = tracker_quality.lower()
-                                            loop_results.append(loop_message)
-
-                                    else:
-                                        if loop_results:
-                                            is_upgrade = True
-
-                                            for lr in loop_results:
-                                                if not self.settings.is_upgrade(quality, lr):
-                                                    is_upgrade = False
-                                                    break
-
-                                            if is_upgrade:
-                                                tracker_message = (
-                                                    f"Resolution found on {tracker}, "
-                                                    f"but seems like an upgrade. {quality}"
-                                                )
-                                            else:
-                                                tracker_message = (
-                                                    f"Resolution found on {tracker}, "
-                                                    "but could be a new quality. Manual search recommended."
-                                                )
-                                        else:
-                                            tracker_message = (
-                                                f"Possible new release. "
-                                                f"{quality if quality else ''} {resolution if resolution else ''}"
-                                            )
-
-                                else:
-                                    tracker_message = False
-
-                                if tracker_message is True:
-                                    output = f"Already on {tracker}"
-                                elif tracker_message is False:
-                                    output = f"Not on {tracker}"
-                                else:
-                                    output = tracker_message
-
+                            if results and not self.allow_dupes:
+                                tracker_message = True
                                 return {
                                     "tracker": tracker,
                                     "cached": True,
                                     "message": tracker_message,
-                                    "output": output,
+                                    "output": "Duplicate results detected and allow_dupes is set to False. Banning.",
                                     "error": False,
                                 }
 
-                            except requests.exceptions.Timeout:
-                                return {
-                                    "tracker": tracker,
-                                    "cached": False,
-                                    "message": None,
-                                    "output": (
-                                        f"Timeout searching {tracker} for {value['title']}. "
-                                        "Search was not cached and will be retried next run."
-                                    ),
-                                    "error": True,
-                                }
+                            if results:
+                                loop_results = []
 
-                            except requests.exceptions.RequestException as e:
-                                return {
-                                    "tracker": tracker,
-                                    "cached": False,
-                                    "message": None,
-                                    "output": (
-                                        f"Request error searching {tracker} for {value['title']}: {e}. "
-                                        "Search was not cached and will be retried next run."
-                                    ),
-                                    "error": True,
-                                }
+                                for i, result in enumerate(results):
+                                    dupe_res = False
+                                    dupe_quality = False
 
-                            except Exception as e:
-                                return {
-                                    "tracker": tracker,
-                                    "cached": False,
-                                    "message": None,
-                                    "output": (
-                                        f"Something went wrong searching {tracker} for "
-                                        f"{value['title']}: {e}\n{traceback.format_exc()}"
-                                    ),
-                                    "error": True,
-                                }
+                                    tracker_resolution = result.get("resolution")
+                                    tracker_quality = re.sub(
+                                        r"[^a-zA-Z]",
+                                        "",
+                                        result.get("quality") or "",
+                                    ).strip()
 
-                        tracker_results = {}
+                                    tracker_group = self.normalize_group(result.get("group"))
+                                    file_group_clean = self.normalize_group(file_group)
+                                    tracker_name = result.get("name")
 
-                        max_workers = len(remaining_trackers)
-
-                        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                            futures = {
-                                executor.submit(search_one_tracker, tracker): tracker
-                                for tracker in remaining_trackers
-                            }
-
-                            for future in as_completed(futures):
-                                result = future.result()
-                                tracker_results[result["tracker"]] = result
-
-                        for tracker in remaining_trackers:
-                            result = tracker_results.get(tracker)
-
-                            if not result:
-                                continue
-
-                            tracker_message = result["message"]
-
-                            if result["cached"]:
-                                value["trackers"][tracker] = tracker_message
-
-                                # Create the hardlink after this tracker has been classified.
-                                section = self.section_for_tracker_message(tracker_message)
-                                if section:
-                                    self.hardlink_single_file(
-                                        tracker,
-                                        section,
-                                        value["file_location"],
+                                    dupe_group = self.release_groups_match(
+                                        file_group_clean,
+                                        tracker_group,
+                                        tracker_name,
                                     )
 
-                            if verbose or result["error"]:
-                                print(result["output"])
+                                    clean_tracker_resolution = (
+                                        "".join(re.findall(r"\d+", tracker_resolution))
+                                        if tracker_resolution
+                                        else None
+                                    )
 
-                        print("Waiting for cooldown...", self.cooldown, "seconds")
-                        time.sleep(self.cooldown)
+                                    clean_file_resolution = (
+                                        "".join(re.findall(r"\d+", resolution))
+                                        if resolution
+                                        else None
+                                    )
 
-                    except Exception as e:
-                        print(f"Something went wrong searching trackers for {value['title']} ", e)
-                        print(traceback.format_exc())
+                                    if (
+                                        clean_file_resolution
+                                        and clean_tracker_resolution
+                                        and clean_file_resolution == clean_tracker_resolution
+                                    ):
+                                        dupe_res = True
 
-                    except Exception as e:
-                        print(f"Something went wrong searching trackers for {value['title']} ", e)
-                        print(traceback.format_exc())
+                                    # Same resolution + same group = secure duplicate.
+                                    if dupe_res and dupe_group:
+                                        tracker_message = True
+                                        break
 
-                    self.save_database()
+                                    if quality and tracker_quality.lower() == quality.lower():
+                                        dupe_quality = True
 
-            self.save_database()
+                                    if dupe_res and dupe_quality:
+                                        tracker_message = True
+                                        break
 
-        except Exception as e:
-            print("Error searching tracker: ", e)
-            print(traceback.format_exc())
+                                    elif (dupe_res and not quality) or (
+                                        quality and dupe_quality and not resolution
+                                    ):
+                                        tracker_message = (
+                                            f"Source was found on {tracker}, but couldn't get enough info "
+                                            "from filename. Manual search required."
+                                        )
+                                        break
+
+                                    elif dupe_res and quality:
+                                        loop_message = tracker_quality.lower()
+                                        loop_results.append(loop_message)
+
+                                else:
+                                    if loop_results:
+                                        is_upgrade = True
+
+                                        for lr in loop_results:
+                                            if not self.settings.is_upgrade(quality, lr):
+                                                is_upgrade = False
+                                                break
+
+                                        if is_upgrade:
+                                            tracker_message = (
+                                                f"Resolution found on {tracker}, "
+                                                f"but seems like an upgrade. {quality}"
+                                            )
+                                        else:
+                                            tracker_message = (
+                                                f"Resolution found on {tracker}, "
+                                                "but could be a new quality. Manual search recommended."
+                                            )
+                                    else:
+                                        tracker_message = (
+                                            f"Possible new release. "
+                                            f"{quality if quality else ''} {resolution if resolution else ''}"
+                                        )
+
+                            else:
+                                tracker_message = False
+
+                            if tracker_message is True:
+                                output = f"Already on {tracker}"
+                            elif tracker_message is False:
+                                output = f"Not on {tracker}"
+                            else:
+                                output = tracker_message
+
+                            return {
+                                "tracker": tracker,
+                                "cached": True,
+                                "message": tracker_message,
+                                "output": output,
+                                "error": False,
+                            }
+
+                        except requests.exceptions.Timeout:
+                            return {
+                                "tracker": tracker,
+                                "cached": False,
+                                "message": None,
+                                "output": (
+                                    f"Timeout searching {tracker} for {value['title']}. "
+                                    "Search was not cached and will be retried next run."
+                                ),
+                                "error": True,
+                            }
+
+                        except requests.exceptions.RequestException as e:
+                            return {
+                                "tracker": tracker,
+                                "cached": False,
+                                "message": None,
+                                "output": (
+                                    f"Request error searching {tracker} for {value['title']}: {e}. "
+                                    "Search was not cached and will be retried next run."
+                                ),
+                                "error": True,
+                            }
+
+                        except Exception as e:
+                            return {
+                                "tracker": tracker,
+                                "cached": False,
+                                "message": None,
+                                "output": (
+                                    f"Something went wrong searching {tracker} for "
+                                    f"{value['title']}: {e}\n{traceback.format_exc()}"
+                                ),
+                                "error": True,
+                            }
+
+                    tracker_results = {}
+
+                    max_workers = len(remaining_trackers)
+
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        futures = {
+                            executor.submit(search_one_tracker, tracker): tracker
+                            for tracker in remaining_trackers
+                        }
+
+                        for future in as_completed(futures):
+                            result = future.result()
+                            tracker_results[result["tracker"]] = result
+
+                    for tracker in remaining_trackers:
+                        result = tracker_results.get(tracker)
+
+                        if not result:
+                            continue
+
+                        tracker_message = result["message"]
+
+                        if result["cached"]:
+                            value["trackers"][tracker] = tracker_message
+
+                            # Create the hardlink after this tracker has been classified.
+                            section = self.section_for_tracker_message(tracker_message)
+                            if section:
+                                self.hardlink_single_file(
+                                    tracker,
+                                    section,
+                                    value["file_location"],
+                                )
+
+                        if verbose or result["error"]:
+                            print(result["output"])
+
+                    print("Waiting for cooldown...", self.cooldown, "seconds")
+                    time.sleep(self.cooldown)
+
+                except Exception as e:
+                    print(f"Something went wrong searching trackers for {value['title']} ", e)
+                    print(traceback.format_exc())
 
     def ensure_search_data_trackers(self):
         changed = False

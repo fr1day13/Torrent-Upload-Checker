@@ -978,23 +978,23 @@ class UploadChecker:
                 if verbose:
                     print(f"Filename: {value['file_name']}")
 
-                    tmdb = value["tmdb"]
-                    quality = value["quality"] if value.get("quality") else None
-                    resolution = value["resolution"] if value.get("resolution") else None
-                    file_group = self.normalize_group(value.get("group"))
+                tmdb = value["tmdb"]
+                quality = value["quality"] if value.get("quality") else None
+                resolution = value["resolution"] if value.get("resolution") else None
+                file_group = self.normalize_group(value.get("group"))
 
-                    if not file_group:
-                        file_name_for_group = value.get("file_name") or ""
-                        parsed_group = parse_file(file_name_for_group).get("group") if file_name_for_group else None
-                        file_group = self.normalize_group(
-                            parsed_group or self.extract_group_from_name(file_name_for_group)
-                        )
+                if not file_group:
+                    file_name_for_group = value.get("file_name") or ""
+                    parsed_group = parse_file(file_name_for_group).get("group") if file_name_for_group else None
+                    file_group = self.normalize_group(
+                        parsed_group or self.extract_group_from_name(file_name_for_group)
+                    )
 
-                        if file_group:
-                            value["group"] = file_group
+                    if file_group:
+                        value["group"] = file_group
 
-                    if "trackers" not in value:
-                        value["trackers"] = {}
+                if "trackers" not in value:
+                    value["trackers"] = {}
 
                 try:
                     def search_one_tracker(tracker):
@@ -1193,7 +1193,6 @@ class UploadChecker:
                             }
 
                     tracker_results = {}
-
                     max_workers = len(remaining_trackers)
 
                     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -1235,6 +1234,14 @@ class UploadChecker:
                 except Exception as e:
                     print(f"Something went wrong searching trackers for {value['title']} ", e)
                     print(traceback.format_exc())
+
+                self.save_database()
+
+            self.save_database()
+
+        except Exception as e:
+            print("Error searching tracker: ", e)
+            print(traceback.format_exc())
 
     def ensure_search_data_trackers(self):
         changed = False
